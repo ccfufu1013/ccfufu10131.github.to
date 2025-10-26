@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>生死之赌（炼狱版）</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: "Arial Black", sans-serif;
+        }
+        body {
+            background: #0f0f0f;
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 2rem;
+            padding: 1rem;
+        }
+        .game-title {
+            font-size: 3rem;
+            color: #ff4444;
+            text-shadow: 0 0 15px rgba(255,68,68,0.8);
+            letter-spacing: 2px;
+        }
+        .btn {
+            padding: 1rem 2rem;
+            font-size: 1.2rem;
+            border: none;
+            border-radius: 8px;
+            color: #fff;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            box-shadow: 0 4px 0 rgba(0,0,0,0.2);
+            position: relative;
+            overflow: hidden;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 0 rgba(0,0,0,0.2), 0 0 10px rgba(255,255,255,0.1);
+        }
+        .btn:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 0 rgba(0,0,0,0.2);
+        }
+        .btn::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+            transition: left 0.4s ease;
+        }
+        .btn:hover::after {
+            left: 100%;
+        }
+        .btn:disabled {
+            background: #666;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: 0 2px 0 #444;
+        }
+        .btn:disabled::after {
+            display: none;
+        }
+        .enter-battle-btn {
+            background: #44ff44;
+            color: #000;
+            font-weight: bold;
+            box-shadow: 0 4px 0 #33cc33, 0 0 15px rgba(68,255,68,0.6);
+        }
+        .enter-battle-btn:hover {
+            background: #33cc33;
+            box-shadow: 0 6px 0 #22aa22, 0 0 20px rgba(68,255,68,0.8);
+        }
+        .panel {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 1.5rem;
+            background: #1a1a1a;
+            padding: 2rem;
+            border-radius: 12px;
+            border: 2px solid #ff4444;
+            width: 90%;
+            max-width: 600px;
+        }
+        .panel.active {
+            display: flex;
+            animation: panelFade 0.3s ease;
+        }
+        @keyframes panelFade {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .loading-panel {
+            gap: 1.2rem;
+        }
+        .loading-text {
+            font-size: 1.2rem;
+            color: #44ddff;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .loading-text span {
+            animation: blink 1s infinite;
+        }
+        .loading-text span:nth-child(2) { animation-delay: 0.2s; }
+        .loading-text span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes blink {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+        }
+        .skill-loading-text {
+            font-size: 1rem;
+            color: #ffccdd;
+            margin-top: 0.5rem;
+        }
+        .hp-container {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            width: 100%;
+        }
+        .hp-card {
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            padding: 1rem;
+            border-radius: 8px;
+            background: #222;
+            position: relative;
+        }
+        .emoji-feedback {
+            position: absolute;
+            right: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 1.8rem;
+            opacity: 0;
+            transition: opacity 0.2s ease, transform 0.3s ease;
+        }
+        .emoji-feedback.show {
+            opacity: 1;
+            transform: translateY(-50%) scale(1.2);
+        }
+        .skill-display {
+            font-size: 1rem;
+            color: #ffccdd;
+            font-style: italic;
+            height: 2.4rem; /* 适配两行技能显示 */
+        }
+        .hp-title {
+            font-size: 1.5rem;
+            color: #ffdd44;
+        }
+        .hp-display {
+            font-size: 2.2rem;
+            letter-spacing: 6px;
+            padding: 0.5rem 0;
+        }
+        .turn-tip {
+            font-size: 1.3rem;
+            color: #fff;
+            text-shadow: 0 0 10px rgba(255,255,255,0.3);
+            height: 2.5rem;
+            text-align: center;
+            margin-top: 1rem;
+            padding: 0.5rem;
+            border-radius: 6px;
+            background-image: linear-gradient(to right, #8b0000, #b22222, #8b0000);
+            background-size: 200% auto;
+            animation: gradientMove 3s ease infinite;
+            width: 100%;
+        }
+        @keyframes gradientMove {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        .skill-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1rem;
+            width: 100%;
+        }
+        .skill-btn {
+            padding: 1rem;
+            background: #2a2a2a;
+            border: 2px solid #44ddff;
+            color: #fff;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: left;
+        }
+        .skill-btn:hover {
+            background: #3a3a3a;
+            border-color: #44ffaa;
+            transform: translateX(5px);
+        }
+        .skill-selected {
+            background: #3a3a3a;
+            border-color: #44ffaa;
+            box-shadow: 0 0 10px rgba(68,255,170,0.5);
+        }
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 999;
+        }
+        .modal.active {
+            display: flex;
+        }
+        .modal-content {
+            background: #1a1a1a;
+            padding: 3rem 4rem;
+            border-radius: 12px;
+            border: 2px solid #ff4444;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+            transform: scale(0.8);
+            opacity: 0;
+            transition: all 0.3s ease;
+        }
+        .modal.active .modal-content {
+            transform: scale(1);
+            opacity: 1;
+        }
+        .fail-text {
+            font-size: 2.5rem;
+            color: #ff4444;
+        }
+        .win-text {
+            font-size: 2.5rem;
+            color: #44ff44;
+            text-shadow: 0 0 15px rgba(68,255,68,0.8);
+        }
+        .attack-btn-group {
+            display: flex;
+            gap: 1rem;
+            width: 100%;
+            justify-content: center;
+        }
+        @keyframes hitShake {
+            0%, 100% { transform: translateX(0); }
+            20% { transform: translateX(-5px); }
+            40% { transform: translateX(5px); }
+            60% { transform: translateX(-3px); }
+            80% { transform: translateX(3px); }
+        }
+        .hit-shake {
+            animation: hitShake 0.3s ease;
+        }
+        @keyframes reviveGlow {
+            0%, 100% { box-shadow: 0 0 10px rgba(68,255,68,0.5); }
+            50% { box-shadow: 0 0 20px rgba(68,255,68,0.8); }
+        }
+        .revive-glow {
+            animation: reviveGlow 1s ease;
+        }
+        /* 回复特效：绿色脉冲（玩家+对手通用） */
+        @keyframes healPulse {
+            0%, 100% { box-shadow: 0 0 15px rgba(68,255,68,0.6); }
+            50% { box-shadow: 0 0 25px rgba(68,255,68,0.9); }
+        }
+        .heal-pulse {
+            animation: healPulse 1s ease;
+        }
+        .skill-select-tip {
+            font-size: 1rem;
+            color: #ffdd44;
+            margin-top: -1rem;
+        }
+        /* 行动次数提示样式 */
+        .action-count {
+            font-size: 1rem;
+            color: #44ddff;
+            margin-top: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <h1 class="game-title">生死之赌（炼狱版）</h1>
+    <button id="startBtn" class="btn" style="background: #ff4444;">开始赌局</button>
+    <div id="purgatoryPanel" class="panel">
+        <h2>炼狱模式 - 极限挑战</h2>
+        <p style="text-align:center; color:#ffccdd;">对手初始2技能 | <b>对手攻击命中后70%概率回2❤️</b> | 玩家攻击自己1/6中 | <b>玩家❤️全扣完50%复活</b> | 对手攻玩家70%中 | <b>玩家基础生命5❤️</b> | <b>玩家基础伤害2❤️</b> | 对手基础生命6❤️ | 对手基础伤害2❤️ | <b>攻击自己未命中+1行动，同一方最多2次，达上限切回合</b> | <b>玩家新增回复键（占1次行动）</b></p>
+        <button id="enterSkillSelectBtn" class="btn" style="background: #ffaa00; color:#000;">进入技能选择</button>
+    </div>
+    <div id="playerSkillPanel" class="panel">
+        <h2>你的技能选择（选2个）</h2>
+        <p class="skill-select-tip">可选择不同技能，效果叠加生效</p>
+        <div class="skill-grid">
+            <button class="skill-btn" data-skill="extraHp">1. 多一个❤️（初始生命值+1）</button>
+            <button class="skill-btn" data-skill="shield">2. 护盾（无视一次中弹伤害）</button>
+            <button class="skill-btn" data-skill="extraDmg">3. 致命一击（攻击命中时多扣1❤️）</button>
+        </div>
+        <button id="confirmPlayerSkill" class="btn" disabled style="background: #44ddff; color: #000;">确认选择（已选：0/2）</button>
+    </div>
+    <div id="enemySkillLoadingPanel" class="panel loading-panel">
+        <h2>对手正在加载双技能</h2>
+        <div class="loading-text">
+            分析战局中<span>.</span><span>.</span><span>.</span>
+        </div>
+        <div class="skill-loading-text" id="enemySkillLoadingText">对手技能1：随机中...<br>对手技能2：随机中...</div>
+        <button id="enterBattleBtn" class="btn enter-battle-btn" disabled>进入战局</button>
+    </div>
+    <div id="gamePanel" class="panel">
+        <div class="hp-card">
+            <span id="enemySkillDisplay" class="skill-display">技能1：无<br>技能2：无</span>
+            <div class="hp-title">对手生命值</div>
+            <div id="enemyHp" class="hp-display">❤️❤️❤️❤️❤️❤️</div> <!-- 对手初始6❤️ -->
+            <div id="enemyShield" class="hp-title" style="color: #44ddff; display: none;">护盾：1</div>
+            <div id="enemyEmoji" class="emoji-feedback">😡</div>
+        </div>
+        <div class="hp-card">
+            <span id="playerSkillDisplay" class="skill-display">技能1：无<br>技能2：无</span>
+            <div class="hp-title">你的生命值</div>
+            <div id="playerHp" class="hp-display">❤️❤️❤️❤️❤️</div> <!-- 玩家初始5❤️ -->
+            <div id="playerShield" class="hp-title" style="color: #44ddff; display: none;">护盾：1</div>
+            <div id="playerEmoji" class="emoji-feedback">😡</div>
+        </div>
+        <!-- 行动次数提示（明确上限） -->
+        <div class="action-count" id="actionCountTip">当前回合行动次数：0/1（上限2次）</div>
+        <!-- 回复键 -->
+        <div class="attack-btn-group">
+            <button id="attackSelfBtn" class="btn" style="background: #ff4444;">攻击自己</button>
+            <button id="attackEnemyBtn" class="btn" style="background: #44aa44;">攻击对手</button>
+            <button id="healBtn" class="btn" style="background: #44ff88; color: #000;">回复生命</button>
+        </div>
+        <div class="turn-tip" id="turnTip">回合开始！随机先手...</div>
+    </div>
+    <div id="failModal" class="modal">
+        <div class="modal-content">
+            <div class="fail-text">菜！炼狱模式都打不过</div>
+            <button id="restartBtn" class="btn" style="background: #ff4444;">重新赌局</button>
+        </div>
+    </div>
+    <div id="winModal" class="modal">
+        <div class="modal-content">
+            <div class="win-text">牛！炼狱战神就是你</div>
+            <button id="winRestartBtn" class="btn" style="background: #44aa44;">再来一局</button>
+        </div>
+    </div>
+    <script>
+        const gameState = {
+            baseHp: 5, // 玩家基础生命5❤️
+            enemyBaseHp: 6, // 对手基础生命6❤️
+            difficulty: 'purgatory',
+            playerSkills: [],
+            enemySkills: [],
+            playerHp: 5, // 玩家初始生命5❤️
+            enemyHp: 6, // 对手初始生命6❤️
+            playerShield: 0,
+            enemyShield: 0,
+            currentTurn: null, // 当前行动方（player/enemy）
+            hasExtraAttack: false, // 玩家攻击自己未命中的额外攻击机会
+            attackCd: 1500,
+            isSettling: false,
+            hasRevived: false,
+            currentActionCount: 0, // 当前方已行动次数
+            baseActionCount: 1, // 每方基础行动次数
+            maxActionLimit: 2, // 同一方最多行动次数（上限）
+            hasAddedAction: false // 标记当前方是否已触发“攻击自己未命中+行动”（避免多次叠加）
+        };
+        const skillNameMap = {
+            extraHp: "多一个❤️",
+            shield: "护盾（1次）",
+            extraDmg: "致命一击",
+            null: "无"
+        };
+        // DOM元素获取
+        const startBtn = document.getElementById('startBtn');
+        const purgatoryPanel = document.getElementById('purgatoryPanel');
+        const playerSkillPanel = document.getElementById('playerSkillPanel');
+        const enemySkillLoadingPanel = document.getElementById('enemySkillLoadingPanel');
+        const gamePanel = document.getElementById('gamePanel');
+        const failModal = document.getElementById('failModal');
+        const winModal = document.getElementById('winModal');
+        const enterSkillSelectBtn = document.getElementById('enterSkillSelectBtn');
+        const playerSkillBtns = document.querySelectorAll('.skill-btn:not(.enemy-skill-btn)');
+        const confirmPlayerSkill = document.getElementById('confirmPlayerSkill');
+        const playerHpEl = document.getElementById('playerHp');
+        const enemyHpEl = document.getElementById('enemyHp');
+        const playerShieldEl = document.getElementById('playerShield');
+        const enemyShieldEl = document.getElementById('enemyShield');
+        const playerSkillDisplay = document.getElementById('playerSkillDisplay');
+        const enemySkillDisplay = document.getElementById('enemySkillDisplay');
+        const enemySkillLoadingText = document.getElementById('enemySkillLoadingText');
+        const enterBattleBtn = document.getElementById('enterBattleBtn');
+        const playerEmoji = document.getElementById('playerEmoji');
+        const enemyEmoji = document.getElementById('enemyEmoji');
+        const turnTip = document.getElementById('turnTip');
+        const attackSelfBtn = document.getElementById('attackSelfBtn');
+        const attackEnemyBtn = document.getElementById('attackEnemyBtn');
+        const healBtn = document.getElementById('healBtn');
+        const restartBtn = document.getElementById('restartBtn');
+        const winRestartBtn = document.getElementById('winRestartBtn');
+        const actionCountTip = document.getElementById('actionCountTip');
+
+        function initEventListeners() {
+            startBtn.addEventListener('click', () => {
+                startBtn.style.display = 'none';
+                purgatoryPanel.classList.add('active');
+            });
+
+            enterSkillSelectBtn.addEventListener('click', () => {
+                purgatoryPanel.classList.remove('active');
+                playerSkillPanel.classList.add('active');
+            });
+
+            playerSkillBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const selectedSkill = btn.dataset.skill;
+                    if (gameState.playerSkills.includes(selectedSkill)) {
+                        gameState.playerSkills = gameState.playerSkills.filter(skill => skill !== selectedSkill);
+                        btn.classList.remove('skill-selected');
+                    } else if (gameState.playerSkills.length < 2) {
+                        gameState.playerSkills.push(selectedSkill);
+                        btn.classList.add('skill-selected');
+                    }
+                    confirmPlayerSkill.disabled = gameState.playerSkills.length !== 2;
+                    confirmPlayerSkill.textContent = `确认选择（已选：${gameState.playerSkills.length}/2）`;
+                });
+            });
+
+            confirmPlayerSkill.addEventListener('click', () => {
+                if (gameState.playerSkills.length !== 2) return;
+                playerSkillPanel.classList.remove('active');
+                enemySkillLoadingPanel.classList.add('active');
+                randomEnemyDoubleSkills();
+            });
+
+            enterBattleBtn.addEventListener('click', () => {
+                enemySkillLoadingPanel.classList.remove('active');
+                initGame();
+                gamePanel.classList.add('active');
+            });
+
+            attackSelfBtn.addEventListener('click', () => {
+                if (gameState.currentTurn !== 'player' || gameState.isSettling || gameState.currentActionCount >= gameState.maxActionLimit) return;
+                disableActionBtns();
+                attackTarget('self');
+            });
+
+            attackEnemyBtn.addEventListener('click', () => {
+                if (gameState.currentTurn !== 'player' || gameState.isSettling || gameState.currentActionCount >= gameState.maxActionLimit) return;
+                const isExtra = gameState.hasExtraAttack;
+                if (isExtra) gameState.hasExtraAttack = false;
+                disableActionBtns();
+                attackTarget('enemy', false, isExtra);
+            });
+
+            healBtn.addEventListener('click', () => {
+                if (gameState.currentTurn !== 'player' || gameState.isSettling || gameState.currentActionCount >= gameState.maxActionLimit) return;
+                disableActionBtns();
+                playerHeal();
+            });
+
+            restartBtn.addEventListener('click', () => resetGame(failModal));
+            winRestartBtn.addEventListener('click', () => resetGame(winModal));
+        }
+
+        function randomEnemyDoubleSkills() {
+            const skills = ['extraHp', 'shield', 'extraDmg'];
+            const skill1 = skills[Math.floor(Math.random() * skills.length)];
+            let skill2;
+            do {
+                skill2 = skills[Math.floor(Math.random() * skills.length)];
+            } while (skill2 === skill1);
+            
+            gameState.enemySkills = [skill1, skill2];
+            const skill1Name = skillNameMap[skill1];
+            const skill2Name = skillNameMap[skill2];
+            setTimeout(() => {
+                enemySkillLoadingText.textContent = `对手技能1：${skill1Name}\n对手技能2：${skill2Name}`;
+                enterBattleBtn.disabled = false;
+            }, 1500);
+        }
+
+        function disableActionBtns() {
+            attackSelfBtn.disabled = true;
+            attackEnemyBtn.disabled = true;
+            healBtn.disabled = true;
+        }
+
+        function enableActionBtns() {
+            if (gameState.currentTurn === 'player' && gameState.currentActionCount < gameState.maxActionLimit) {
+                attackSelfBtn.disabled = false;
+                attackEnemyBtn.disabled = false;
+                healBtn.disabled = false;
+            }
+        }
+
+        function initGame() {
+            gameState.playerHp = gameState.baseHp;
+            gameState.enemyHp = gameState.enemyBaseHp;
+            gameState.playerShield = 0;
+            gameState.enemyShield = 0;
+            gameState.hasExtraAttack = false;
+            gameState.isSettling = false;
+            gameState.hasRevived = false;
+            gameState.currentActionCount = 0;
+            gameState.hasAddedAction = false;
+
+            // 玩家双技能生效
+            gameState.playerSkills.forEach(skill => {
+                if (skill === 'extraHp') gameState.playerHp += 1;
+                if (skill === 'shield') {
+                    gameState.playerShield = 1;
+                    playerShieldEl.style.display = 'block';
+                }
+            });
+
+            // 对手双技能生效
+            gameState.enemySkills.forEach(skill => {
+                if (skill === 'extraHp') gameState.enemyHp += 1;
+                if (skill === 'shield' && gameState.enemyShield === 0) {
+                    gameState.enemyShield = 1;
+                    enemyShieldEl.style.display = 'block';
+                }
+            });
+
+            // 更新技能显示
+            const playerSkill1 = gameState.playerSkills[0] || null;
+            const playerSkill2 = gameState.playerSkills[1] || null;
+            playerSkillDisplay.textContent = `技能1：${skillNameMap[playerSkill1]}\n技能2：${skillNameMap[playerSkill2]}`;
+            enemySkillDisplay.textContent = `技能1：${skillNameMap[gameState.enemySkills[0]]}\n技能2：${skillNameMap[gameState.enemySkills[1]]}`;
+            
+            updateHpDisplay();
+            updateActionCountTip();
+            hideAllEmojis();
+            setTimeout(() => randomTurn(), 1000);
+        }
+
+        function randomTurn() {
+            if (gameState.isSettling) return;
+            gameState.currentTurn = gameState.currentTurn === null 
+                ? (Math.random() > 0.5 ? 'player' : 'enemy') 
+                : (gameState.currentTurn === 'player' ? 'enemy' : 'player');
+            gameState.currentActionCount = 0;
+            gameState.hasExtraAttack = false;
+            gameState.hasAddedAction = false;
+            
+            updateActionCountTip();
+            turnTip.textContent = gameState.currentTurn === 'player' 
+                ? '你的回合！选择攻击/回复目标' 
+                : '对手的回合！准备攻击自己/你...';
+
+            if (gameState.currentTurn === 'enemy') {
+                disableActionBtns();
+                setTimeout(() => {
+                    if (gameState.isSettling) return;
+                    enemyTakeAction();
+                }, 1500);
+            } else {
+                enableActionBtns();
+            }
+        }
+
+        function enemyTakeAction() {
+            if (gameState.currentActionCount >= gameState.maxActionLimit || gameState.isSettling) {
+                setTimeout(() => randomTurn(), gameState.attackCd);
+                return;
+            }
+            const enemyTarget = Math.random() < 0.1 ? 'self' : 'player';
+            attackTarget(enemyTarget, true, false, (isHit, target) => {
+                gameState.currentActionCount += 1;
+                if (target === 'self' && !isHit && !gameState.hasAddedAction && gameState.currentActionCount < gameState.maxActionLimit) {
+                    gameState.hasAddedAction = true;
+                    turnTip.textContent = '对手攻击自己未命中！获得额外1次行动';
+                }
+                updateActionCountTip();
+                setTimeout(() => enemyTakeAction(), gameState.attackCd);
+            });
+        }
+
+        // 核心修改：对手仅攻击命中后70%概率回2❤️
+        function attackTarget(target, isEnemy = false, isExtra = false, actionCallback = null) {
+            if (gameState.isSettling) return;
+            const attacker = isEnemy ? 'enemy' : 'player';
+            const realTarget = target === 'self' ? attacker : (attacker === 'player' ? 'enemy' : 'player');
+            let isHit = false;
+            let actionResult = { isHit: false, target: target };
+
+            // 命中概率不变
+            if (attacker === 'enemy') {
+                if (realTarget === 'enemy') isHit = false;
+                else isHit = Math.random() < 0.7;
+            } else {
+                if (realTarget === 'player') isHit = Math.random() < 1/6;
+                else isHit = Math.random() < 1/2;
+            }
+            actionResult.isHit = isHit;
+
+            hideAllEmojis();
+            if (isHit) {
+                // 伤害计算：玩家/对手基础伤害均为2❤️
+                let damage = attacker === 'enemy' ? 2 : 2;
+                if (attacker === 'player' && gameState.playerSkills.includes('extraDmg')) damage = 3;
+                if (attacker === 'enemy' && gameState.enemySkills.includes('extraDmg')) damage = 3;
+
+                let isShieldUsed = false;
+                // 护盾抵消伤害
+                if (realTarget === 'player' && gameState.playerShield > 0) {
+                    gameState.playerShield -= 1;
+                    playerShieldEl.style.display = 'none';
+                    turnTip.textContent = isEnemy ? '对手攻击你！护盾抵消伤害' : '你攻击自己！护盾抵消伤害';
+                    showEmoji('player', '😅');
+                    isShieldUsed = true;
+                } else if (realTarget === 'enemy' && gameState.enemyShield > 0) {
+                    gameState.enemyShield -= 1;
+                    enemyShieldEl.style.display = 'none';
+                    enemySkillDisplay.textContent = `技能1：${skillNameMap[gameState.enemySkills[0]]}\n技能2：${gameState.enemySkills.includes('shield') ? '护盾（已消耗）' : skillNameMap[gameState.enemySkills[1]]}`;
+                    turnTip.textContent = isEnemy ? '对手攻击自己！护盾抵消伤害' : '你攻击对手！护盾抵消伤害';
+                    showEmoji('enemy', '😅');
+                    isShieldUsed = true;
+                }
+
+                // 扣血逻辑
+                if (!isShieldUsed) {
+                    gameState[`${realTarget}Hp`] -= damage;
+                    const hpCard = document.querySelector(`#${realTarget}Hp`).parentElement;
+                    hpCard.classList.add('hit-shake');
+                    setTimeout(() => hpCard.classList.remove('hit-shake'), 300);
+
+                    // 攻击提示
+                    if (attacker === 'player' && realTarget === 'enemy') {
+                        showEmoji('enemy', '😡');
+                        turnTip.textContent = `你攻击对手！命中！对手损失${damage}❤️`;
+                    } else if (attacker === 'player' && realTarget === 'player') {
+                        showEmoji('player', '😡');
+                        turnTip.textContent = `你攻击自己！命中！你损失${damage}❤️`;
+                    } else if (attacker === 'enemy' && realTarget === 'player') {
+                        showEmoji('player', '😡');
+                        turnTip.textContent = `对手攻击你！命中！你损失${damage}❤️`;
+                    }
+                }
+
+                // 核心修改：仅对手攻击命中时（无论是否触发护盾），70%概率回2❤️
+                if (attacker === 'enemy') {
+                    const healRand = Math.random();
+                    if (healRand < 0.7) { // 70%概率（匹配规则提示）
+                        gameState.enemyHp += 2; // 回2❤️
+                        const enemyHpCard = document.querySelector('#enemyHp').parentElement;
+                        enemyHpCard.classList.add('heal-pulse'); // 回血特效
+                        setTimeout(() => enemyHpCard.classList.remove('heal-pulse'), 1000);
+                        // 叠加回血提示
+                        turnTip.textContent += ` | 对手回血2❤️`;
+                        showEmoji('enemy', '🦋'); // 回血表情
+                    }
+                }
+
+                updateHpDisplay();
+                // 胜负判定
+                if (gameState.playerHp <= 0) {
+                    if (!gameState.hasRevived && Math.random() < 0.5) {
+                        gameState.hasRevived = true;
+                        gameState.playerHp = 1;
+                        updateHpDisplay();
+                        const hpCard = document.querySelector('#playerHp').parentElement;
+                        hpCard.classList.add('revive-glow');
+                        setTimeout(() => hpCard.classList.remove('revive-glow'), 1000);
+                        turnTip.textContent = '你生命值耗尽！在春秋蝉帮助下触发复活！恢复1❤️';
+                        
+                        if (attacker === 'player') {
+                            gameState.currentActionCount += 2;
+                            updateActionCountTip();
+                            setTimeout(() => {
+                                enableActionBtns();
+                                if (actionCallback) actionCallback(actionResult.isHit, actionResult.target);
+                            }, gameState.attackCd);
+                        } else {
+                            setTimeout(() => {
+                                if (actionCallback) actionCallback(actionResult.isHit, actionResult.target);
+                            }, gameState.attackCd);
+                        }
+                        return;
+                    }
+                    gameState.isSettling = true;
+                    setTimeout(() => failModal.classList.add('active'), 1000);
+                    return;
+                }
+                if (gameState.enemyHp <= 0) {
+                    gameState.isSettling = true;
+                    setTimeout(() => winModal.classList.add('active'), 1000);
+                    return;
+                }
+            } else {
+                // 未命中逻辑：删除对手未命中时的回血代码，仅保留原有提示
+                if (attacker === 'player' && realTarget === 'player') {
+                    showEmoji('player', '😅');
+                    gameState.hasExtraAttack = true;
+                    if (!gameState.hasAddedAction && gameState.currentActionCount < gameState.maxActionLimit) {
+                        gameState.hasAddedAction = true;
+                        turnTip.textContent = '你攻击自己未命中！获得额外1次行动+攻击对手机会';
+                    } else {
+                        turnTip.textContent = '你攻击自己未命中！获得额外攻击对手机会';
+                    }
+                } else if (attacker === 'player' && realTarget === 'enemy') {
+                    showEmoji('enemy', '😅');
+                    turnTip.textContent = '你攻击对手！未命中！';
+                } else if (attacker === 'enemy' && realTarget === 'player') {
+                    showEmoji('player', '😅');
+                    turnTip.textContent = '对手攻击你！未命中！';
+                    // 【已删除】对手未命中时的回血逻辑
+                } else if (attacker === 'enemy' && realTarget === 'enemy') {
+                    showEmoji('enemy', '😅');
+                    turnTip.textContent = '对手攻击自己！未命中！';
+                }
+            }
+
+            // 行动后处理不变
+            if (attacker === 'player') {
+                gameState.currentActionCount += 1;
+                updateActionCountTip();
+                setTimeout(() => {
+                    enableActionBtns();
+                    if (gameState.currentActionCount >= gameState.maxActionLimit) {
+                        setTimeout(() => randomTurn(), gameState.attackCd);
+                    }
+                }, gameState.attackCd);
+            } else if (actionCallback) {
+                actionCallback(actionResult.isHit, actionResult.target);
+            }
+        }
+
+        // 玩家回复逻辑不变
+        function playerHeal() {
+            if (gameState.isSettling) return;
+            const healRand = Math.random();
+            let healAmount = 0;
+            if (healRand < 0.9) {
+                healAmount = 2;
+            } else if (healRand < 0.99) {
+                healAmount = 3;
+            } else {
+                healAmount = 4;
+            }
+
+            gameState.playerHp += healAmount;
+            const playerHpCard = document.querySelector('#playerHp').parentElement;
+            playerHpCard.classList.add('heal-pulse');
+            setTimeout(() => playerHpCard.classList.remove('heal-pulse'), 1000);
+
+            updateHpDisplay();
+            showEmoji('player', '✌🤠✌');
+            turnTip.textContent = `回复成功！恢复${healAmount}❤️`;
+
+            gameState.currentActionCount += 1;
+            updateActionCountTip();
+
+            setTimeout(() => {
+                enableActionBtns();
+                if (gameState.currentActionCount >= gameState.maxActionLimit) {
+                    setTimeout(() => randomTurn(), gameState.attackCd);
+                }
+            }, gameState.attackCd);
+        }
+
+        function updateActionCountTip() {
+            actionCountTip.textContent = `当前回合行动次数：${gameState.currentActionCount}/${gameState.maxActionLimit}（上限${gameState.maxActionLimit}次）`;
+        }
+
+        function showEmoji(target, emoji) {
+            const emojiEl = target === 'player' ? playerEmoji : enemyEmoji;
+            emojiEl.textContent = emoji;
+            emojiEl.classList.add('show');
+            setTimeout(() => emojiEl.classList.remove('show'), 500);
+        }
+
+        function hideAllEmojis() {
+            playerEmoji.classList.remove('show');
+            enemyEmoji.classList.remove('show');
+        }
+
+        function updateHpDisplay() {
+            playerHpEl.textContent = '❤️'.repeat(Math.max(0, gameState.playerHp));
+            enemyHpEl.textContent = '❤️'.repeat(Math.max(0, gameState.enemyHp));
+        }
+
+        function resetGame(modal) {
+            gameState.playerSkills = [];
+            gameState.enemySkills = [];
+            gameState.playerHp = gameState.baseHp;
+            gameState.enemyHp = gameState.enemyBaseHp;
+            gameState.playerShield = 0;
+            gameState.enemyShield = 0;
+            gameState.currentTurn = null;
+            gameState.hasExtraAttack = false;
+            gameState.isSettling = false;
+            gameState.hasRevived = false;
+            gameState.currentActionCount = 0;
+            gameState.hasAddedAction = false;
+
+            enterBattleBtn.disabled = true;
+            enemySkillLoadingText.textContent = '对手技能1：随机中...<br>对手技能2：随机中...';
+            playerShieldEl.style.display = 'none';
+            enemyShieldEl.style.display = 'none';
+            modal.classList.remove('active');
+            gamePanel.classList.remove('active');
+            playerSkillBtns.forEach(b => b.classList.remove('skill-selected'));
+            confirmPlayerSkill.disabled = true;
+            confirmPlayerSkill.textContent = '确认选择（已选：0/2）';
+            playerSkillDisplay.textContent = '技能1：无<br>技能2：无';
+            enemySkillDisplay.textContent = '技能1：无<br>技能2：无';
+            turnTip.textContent = '回合开始！随机先手...';
+            updateActionCountTip();
+            hideAllEmojis();
+
+            setTimeout(() => startBtn.style.display = 'block', 300);
+        }
+
+        initEventListeners();
+    </script>
+</body>
+</html>
