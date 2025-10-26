@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>厚乳小七模拟器</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #f5f0f2; overflow: hidden; touch-action: none; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        #gameCanvas { width: 700px; height: 525px; background: #fff; display: block; border: 3px solid #ffccd5; border-radius: 12px; box-shadow: 0 5px 15px rgba(255,204,213,0.3); }
+        #milkBtn { position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%); width: 180px; height: 70px; background: linear-gradient(135deg, #ff9f43, #ff6b6b); border: none; border-radius: 35px; color: white; font-size: 30px; font-weight: bold; text-shadow: 1px 1px 3px rgba(0,0,0,0.2); display: none; cursor: pointer; box-shadow: 0 6px 18px rgba(255,107,107,0.4); transition: all 0.1s ease; z-index: 10; }
+        #milkBtn:active { transform: translateX(-50%) scale(0.95); box-shadow: 0 4px 12px rgba(255,107,107,0.3); }
+        #hpBar { position: fixed; top: 40px; left: 50%; transform: translateX(-50%); width: 320px; height: 32px; background: rgba(0,0,0,0.15); border-radius: 16px; overflow: hidden; z-index: 10; }
+        #hpFill { width: 100%; height: 100%; background: linear-gradient(90deg, #4ecdc4, #45b7aa); transition: width 0.2s ease; }
+        #hpText { position: fixed; top: 42px; left: 50%; transform: translateX(-50%); color: white; font-size: 18px; font-weight: bold; text-shadow: 1px 1px 2px rgba(0,0,0,0.5); z-index: 11; }
+        #attackTip { position: fixed; top: 12%; left: 50%; transform: translateX(-50%); color: #e74c3c; font-size: 32px; font-weight: bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.2); display: none; z-index: 10; }
+        #killTip { position: fixed; top: 40%; left: 50%; transform: translateX(-50%); color: #d63031; font-size: 40px; font-weight: bold; text-shadow: 3px 3px 6px rgba(0,0,0,0.3); display: none; z-index: 20; }
+        #countTip { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #ff4757; font-size: 42px; font-weight: bold; text-shadow: 3px 3px 8px rgba(0,0,0,0.3); display: none; opacity: 0; transition: opacity 0.3s ease; z-index: 30; }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="700" height="525"></canvas>
+    <div id="hpBar">
+        <div id="hpFill"></div>
+    </div>
+    <div id="hpText">5000/5000</div>
+    <button id="milkBtn">后入</button>
+    <div id="attackTip">小七正在用力夹住你🥵</div>
+    <div id="killTip">你被小七夹断了😱</div>
+    <div id="countTip"></div>
+    <script>
+        const game = {
+            canvas: document.getElementById('gameCanvas'),
+            ctx: document.getElementById('gameCanvas').getContext('2d'),
+            milkBtn: document.getElementById('milkBtn'),
+            hpFill: document.getElementById('hpFill'),
+            hpText: document.getElementById('hpText'),
+            attackTip: document.getElementById('attackTip'),
+            killTip: document.getElementById('killTip'),
+            countTip: document.getElementById('countTip'),
+            config: {
+                playerSpeed: 8,
+                playerHp: 5000,
+                triggerMilkDistance: 130,
+                attackValidDistance: 170,
+                attackDuration: 5000,
+                attackDamage: 78.1391, // 伤害降至78.1391（原250→78.1391）
+                xiaoqiMoveSpeed: 2.5, // 速度降至2.5（原4.0→3.0）
+                killProbability: 0.10, // 秒杀概率微调至10%
+                countTipDuration: 1500,
+                doubleTapTime: 300 // 双击判定时间（300ms内两次点击）
+            },
+            player: {
+                x: 150, y: 260, size: 48, hp: 0, targetX: 150, targetY: 260
+            },
+            xiaoqi: {
+                x: 480, y: 260, size: 48, state: 'normal',
+                attackTimer: 0, lastAttackTime: 0,
+                milkCount: 0,
+                moveDirX: (Math.random() - 0.5) * 2.0
+            },
+            touch: {
+                isTouching: false, touchX: 0, touchY: 0,
+                lastTapTime: 0, // 记录上一次点击时间（双击判定用）
+                lastTapX: 0, lastTapY: 0 // 记录上一次点击位置
+            },
+            scaleRatio: 1,
+            isGameOver: false
+        };
+        function initGame() {
+            game.player.hp = game.config.playerHp;
+            updateHpDisplay();
+            
+            const canvasRect = game.canvas.getBoundingClientRect();
+            game.scaleRatio = canvasRect.width / game.canvas.width;
+            
+            // 玩家触摸控制+双击小七判定
+            game.canvas.addEventListener('touchstart', (e) => {
+                if (game.isGameOver) return;
+                const touch = e.touches[0];
+                const rect = game.canvas.getBoundingClientRect();
+                // 转换触摸坐标为游戏画布坐标
+                const tapX = (touch.clientX - rect.left) / game.scaleRatio;
+                const tapY = (touch.clientY - rect.top) / game.scaleRatio;
+                const currentTime = Date.now();
+                // 双击判定：300ms内、点击位置在小七范围内
+                if (currentTime - game.touch.lastTapTime <= game.config.doubleTapTime) {
+                    const distanceToXiaoqi = getDistance(tapX, tapY, game.xiaoqi.x, game.xiaoqi.y);
+                    if (distanceToXiaoqi <= game.xiaoqi.size) {
+                        // 双击小七触发后入效果（同按钮逻辑）
+                        useMilk();
+                        game.touch.lastTapTime = 0; // 重置双击状态
+                        return;
+                    }
+                }
+                // 非双击：更新玩家目标位置+记录点击信息
+                game.touch.touchX = tapX;
+                game.touch.touchY = tapY;
+                game.touch.isTouching = true;
+                game.player.targetX = tapX;
+                game.player.targetY = tapY;
+                // 记录本次点击时间和位置
+                game.touch.lastTapTime = currentTime;
+                game.touch.lastTapX = tapX;
+                game.touch.lastTapY = tapY;
+            });
+            game.canvas.addEventListener('touchmove', (e) => {
+                if (game.isGameOver || !game.touch.isTouching) return;
+                e.preventDefault();
+                const touch = e.touches[0];
+                const rect = game.canvas.getBoundingClientRect();
+                game.player.targetX = (touch.clientX - rect.left) / game.scaleRatio;
+                game.player.targetY = (touch.clientY - rect.top) / game.scaleRatio;
+            });
+            game.canvas.addEventListener('touchend', () => {
+                game.touch.isTouching = false;
+            });
+            // 后入按钮点击逻辑（保留）
+            game.milkBtn.addEventListener('click', useMilk);
+            
+            requestAnimationFrame(gameLoop);
+        }
+        // 后入核心逻辑（按钮+双击小七共用）
+        function useMilk() {
+            if (game.xiaoqi.state === 'attack' || game.isGameOver) return;
+            game.xiaoqi.state = 'attack';
+            game.xiaoqi.attackTimer = game.config.attackDuration;
+            game.xiaoqi.lastAttackTime = Date.now();
+            game.xiaoqi.milkCount++;
+            game.attackTip.style.display = 'block';
+            game.killTip.style.display = 'none';
+            game.milkBtn.style.display = 'none';
+            checkMilkCountTip();
+        }
+        // 累计提示逻辑（修改：5次时2秒后更新文本）
+        function checkMilkCountTip() {
+            const tipEl = game.countTip;
+            if (game.xiaoqi.milkCount === 3) {
+                tipEl.textContent = '🥵小七…小七…不…不会的，齁啊∽';
+                tipEl.style.display = 'block';
+                tipEl.style.opacity = '1';
+                setTimeout(() => {
+                    tipEl.style.opacity = '0';
+                    setTimeout(() => {
+                        tipEl.style.display = 'none';
+                    }, 300);
+                }, game.config.countTipDuration);
+            } else if (game.xiaoqi.milkCount === 5) {
+                // 第一步：显示初始提示“🥵小七已经变成主人的形状了∽”
+                tipEl.textContent = '🥵小七已经变成主人的形状了∽';
+                tipEl.style.display = 'block';
+                tipEl.style.opacity = '1';
+                // 第二步：2秒后更新为目标提示文本
+                setTimeout(() => {
+                    tipEl.textContent = '小七成功变成了你的❤️😡💪';
+                    // 第三步：保持显示1.5秒后淡出隐藏（与原逻辑时长一致）
+                    setTimeout(() => {
+                        tipEl.style.opacity = '0';
+                        setTimeout(() => {
+                            tipEl.style.display = 'none';
+                        }, 300);
+                    }, game.config.countTipDuration);
+                }, 2000);
+            } else {
+                return;
+            }
+        }
+        // 血量更新逻辑（不变）
+        function updateHpDisplay() {
+            const hpPercent = (game.player.hp / game.config.playerHp) * 100;
+            game.hpFill.style.width = `${hpPercent}%`;
+            game.hpText.textContent = `${game.player.hp}/${game.config.playerHp}`;
+            
+            if (game.player.hp <= 0 && !game.isGameOver) {
+                game.isGameOver = true;
+                game.attackTip.style.display = 'none';
+                if (game.player.hp === 0 && game.killTip.style.display === 'block') {
+                    game.killTip.style.display = 'block';
+                } else {
+                    game.attackTip.textContent = '游戏结束！点击刷新重试';
+                    game.attackTip.style.display = 'block';
+                }
+                game.canvas.addEventListener('click', () => window.location.reload());
+            }
+        }
+        // 距离计算工具函数
+        function getDistance(x1, y1, x2, y2) {
+            return Math.hypot(x2 - x1, y2 - y1);
+        }
+        // 小七移动逻辑（低速度适配）
+        function updateXiaoqiMove() {
+            if (game.xiaoqi.state === 'attack') {
+                // 攻击时追玩家（3.0速度更易躲避）
+                const dirX = game.player.x - game.xiaoqi.x;
+                const dirY = game.player.y - game.xiaoqi.y;
+                const distance = getDistance(game.xiaoqi.x, game.xiaoqi.y, game.player.x, game.player.y);
+                game.xiaoqi.x += (dirX / distance) * game.config.xiaoqiMoveSpeed;
+                game.xiaoqi.y += (dirY / distance) * game.config.xiaoqiMoveSpeed;
+            } else {
+                // 正常时随机移动（3.0速度更温和）
+                game.xiaoqi.x += game.xiaoqi.moveDirX * game.config.xiaoqiMoveSpeed;
+                if (Math.random() < 0.015) {
+                    game.xiaoqi.moveDirX = (Math.random() - 0.5) * 2.2;
+                }
+            }
+            // 限制小七不出画布
+            game.xiaoqi.x = Math.max(game.xiaoqi.size/2, Math.min(game.canvas.width - game.xiaoqi.size/2, game.xiaoqi.x));
+            game.xiaoqi.y = Math.max(game.xiaoqi.size/2, Math.min(game.canvas.height - game.xiaoqi.size/2, game.xiaoqi.y));
+        }
+        // 游戏主循环
+        function gameLoop() {
+            if (game.isGameOver) return;
+            const currentTime = Date.now();
+            const ctx = game.ctx;
+            // 清空画布
+            ctx.clearRect(0, 0, game.canvas.width, game.canvas.height);
+            // 更新玩家位置
+            const playerDistance = getDistance(game.player.x, game.player.y, game.player.targetX, game.player.targetY);
+            if (playerDistance > game.config.playerSpeed) {
+                const dirX = (game.player.targetX - game.player.x) / playerDistance;
+                const dirY = (game.player.targetY - game.player.y) / playerDistance;
+                game.player.x += dirX * game.config.playerSpeed;
+                game.player.y += dirY * game.config.playerSpeed;
+            } else {
+                game.player.x = game.player.targetX;
+                game.player.y = game.player.targetY;
+            }
+            // 玩家边界约束
+            game.player.x = Math.max(game.player.size/2, Math.min(game.canvas.width - game.player.size/2, game.player.x));
+            game.player.y = Math.max(game.player.size/2, Math.min(game.canvas.height - game.player.size/2, game.player.y));
+            // 更新小七状态（低速度+低伤害）
+            updateXiaoqiMove();
+            
+            if (game.xiaoqi.state === 'attack') {
+                game.xiaoqi.attackTimer -= 16;
+                if (game.xiaoqi.attackTimer <= 0) {
+                    game.xiaoqi.state = 'normal';
+                    game.attackTip.style.display = 'none';
+                    game.killTip.style.display = 'none';
+                } else {
+                    const distanceToPlayer = getDistance(game.xiaoqi.x, game.xiaoqi.y, game.player.x, game.player.y);
+                    if (distanceToPlayer <= game.config.attackValidDistance) {
+                        if (currentTime - game.xiaoqi.lastAttackTime >= 1200) { // 延长攻击间隔至1.2秒
+                            if (Math.random() <= game.config.killProbability) {
+                                game.player.hp = 0;
+                                game.killTip.style.display = 'block';
+                                game.attackTip.style.display = 'none';
+                            } else {
+                                game.player.hp = Math.max(0, game.player.hp - game.config.attackDamage);
+                                game.killTip.style.display = 'none';
+                            }
+                            updateHpDisplay();
+                            game.xiaoqi.lastAttackTime = currentTime;
+                        }
+                    }
+                }
+            }
+            // 触发后入按钮
+            const distance = getDistance(game.player.x, game.player.y, game.xiaoqi.x, game.xiaoqi.y);
+            if (distance <= game.config.triggerMilkDistance && game.xiaoqi.state === 'normal') {
+                game.milkBtn.style.display = 'block';
+            } else if (game.milkBtn.style.display === 'block') {
+                game.milkBtn.style.display = 'none';
+            }
+            // 绘制角色
+            ctx.font = `${game.player.size}px sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('🤓', game.player.x, game.player.y);
+            const xiaoqiEmoji = game.xiaoqi.state === 'normal' ? '🥺' : '🥵';
+            ctx.fillText(xiaoqiEmoji, game.xiaoqi.x, game.xiaoqi.y);
+            requestAnimationFrame(gameLoop);
+        }
+        // 页面加载初始化
+        window.addEventListener('load', initGame);
+    </script>
+</body>
+</html>
